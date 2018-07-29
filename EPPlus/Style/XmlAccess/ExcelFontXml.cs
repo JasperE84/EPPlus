@@ -2,7 +2,7 @@
  * You may amend and distribute as you like, but don't remove this header!
  *
  * EPPlus provides server-side generation of Excel 2007/2010 spreadsheets.
- * See http://www.codeplex.com/EPPlus for details.
+ * See https://github.com/JanKallman/EPPlus for details.
  *
  * Copyright (C) 2011  Jan Källman
  *
@@ -300,7 +300,7 @@ namespace OfficeOpenXml.Style.XmlAccess
             }
             else
             {
-                float min = -1, max = 500;
+                float min = -1, max = float.MaxValue;
                 foreach (var h in FontSize.FontHeights[name])
                 {
                     if (min < h.Key && h.Key < size)
@@ -312,17 +312,20 @@ namespace OfficeOpenXml.Style.XmlAccess
                         max = h.Key;
                     }
                 }
-                if (min == max)
+                if (min == max || max==float.MaxValue)
                 {
                     return Convert.ToSingle(FontSize.FontHeights[name][min].Height);
                 }
+                else if (min == -1)
+                {
+                    return Convert.ToSingle(FontSize.FontHeights[name][max].Height);
+                }
                 else
                 {
-                    return Convert.ToSingle(FontSize.FontHeights[name][min].Height  + (FontSize.FontHeights[name][max].Height - FontSize.FontHeights[name][min].Height) * ((size - min) / (max - min)));
+                    return Convert.ToSingle(FontSize.FontHeights[name][min].Height + (FontSize.FontHeights[name][max].Height - FontSize.FontHeights[name][min].Height) * ((size - min) / (max - min)));
                 }
             }
         }
-
         internal ExcelFontXml Copy()
         {
             ExcelFontXml newFont = new ExcelFontXml(NameSpaceManager);
@@ -338,7 +341,6 @@ namespace OfficeOpenXml.Style.XmlAccess
             newFont.Color = Color.Copy();
             return newFont;
         }
-
         internal override XmlNode CreateXmlNode(XmlNode topElement)
         {
             TopNode = topElement;

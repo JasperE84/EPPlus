@@ -2,7 +2,7 @@
  * You may amend and distribute as you like, but don't remove this header!
  *
  * EPPlus provides server-side generation of Excel 2007/2010 spreadsheets.
- * See http://www.codeplex.com/EPPlus for details.
+ * See https://github.com/JanKallman/EPPlus for details.
  *
  * Copyright (C) 2011  Jan Källman
  *
@@ -997,6 +997,10 @@ namespace OfficeOpenXml
 					break;
 				}
 			}
+            if(nf==null)
+            {
+                nf = styles.NumberFormats[0].FormatTranslator;  //nf should never be null. If so set to General, Issue 173
+            }
 
 			string format, textFormat;
 			if (forWidthCalc)
@@ -1041,14 +1045,15 @@ namespace OfficeOpenXml
 				else if (nf.DataType == ExcelNumberFormatXml.eFormatType.DateTime)
 				{
                     var date = DateTime.FromOADate(d);
-                    return date.ToString(format, nf.Culture);
-				}
+                    //return date.ToString(format, nf.Culture);
+                    return GetDateText(date, format, nf.Culture);
+                }
 			}
 			else if (v is DateTime)
 			{
 				if (nf.DataType == ExcelNumberFormatXml.eFormatType.DateTime)
 				{
-					return ((DateTime)v).ToString(format, nf.Culture);
+                    return GetDateText((DateTime)v, format, nf.Culture);
 				}
 				else
 				{
@@ -1067,8 +1072,9 @@ namespace OfficeOpenXml
 			{
 				if (nf.DataType == ExcelNumberFormatXml.eFormatType.DateTime)
 				{
-					return new DateTime(((TimeSpan)v).Ticks).ToString(format, nf.Culture);
-				}
+                    return GetDateText(new DateTime(((TimeSpan)v).Ticks), format, nf.Culture);
+                    //return new DateTime(((TimeSpan)v).Ticks).ToString(format, nf.Culture);
+                }
 				else
 				{
 					double d = new DateTime(0).Add((TimeSpan)v).ToOADate();
@@ -1095,10 +1101,40 @@ namespace OfficeOpenXml
 			}
 			return v.ToString();
 }
-		/// <summary>
-		/// Gets or sets a formula for a range.
-		/// </summary>
-		public string Formula
+
+        private static string GetDateText(DateTime d, string format, CultureInfo culture)
+        {
+            if (format == "d" || format == "D")
+            {
+                return d.Day.ToString();
+            }
+            else if (format == "M")
+            {
+                return d.Month.ToString();
+            }
+            else if (format == "m")
+            {
+                return d.Minute.ToString();
+            }
+            else if (format.ToLower() == "y" || format.ToLower() == "yy")
+            {
+                return d.ToString("yy", culture);
+            }
+            else if (format.ToLower() == "yyy" || format.ToLower() == "yyyy")
+            {
+                return d.ToString("yyy", culture);
+            }
+            else
+            {
+                return d.ToString(format, culture);
+            }    
+            
+        }
+
+        /// <summary>
+        /// Gets or sets a formula for a range.
+        /// </summary>
+        public string Formula
 		{
 			get
 			{
@@ -1700,7 +1736,7 @@ namespace OfficeOpenXml
 				}
 				else
 				{
-					return v;
+					return string.IsNullOrEmpty(v) ? null : v; ;
 				}
 			}
 			else
@@ -2048,49 +2084,37 @@ namespace OfficeOpenXml
 		        return null;
 		    }
 
-			//if (Members.Length == 0)
-			//{
-			//	foreach (var item in Collection)
-			//	{
-			//		//_worksheet.Cells[row++, col].Value = item;
-   //                 values[row, col++] = item;
-   //             }
-			//}
-			//else
-			//{
-				foreach (var item in Collection)
-				{
-                    col = 0;
-                    if (item is string || item is decimal || item is DateTime || TypeCompat.IsPrimitive(item))
+			foreach (var item in Collection)
+			{
+                col = 0;
+                if (item is string || item is decimal || item is DateTime || TypeCompat.IsPrimitive(item))
+                {
+                    values[row, col++] = item;
+                }
+                else
+                {
+                    foreach (var t in Members)
                     {
-                        //_worksheet.Cells[row, col++].Value = item;
-                        values[row, col++] = item;
-                    }
-                    else
-                    {
-                        foreach (var t in Members)
+                        if (isSameType == false && item.GetType().GetMember(t.Name, memberFlags).Length == 0)
                         {
-                            if (isSameType == false && item.GetType().GetMember(t.Name, memberFlags).Length == 0)
-                            {
-                                col++;
-                                continue; //Check if the property exists if and inherited class is used
-                            }
-                            else if (t is PropertyInfo)
-                            {
-                                values[row, col++] = ((PropertyInfo)t).GetValue(item, null);
-                            }
-                            else if (t is FieldInfo)
-                            {
-                                values[row, col++] = ((FieldInfo)t).GetValue(item);
-                            }
-                            else if (t is MethodInfo)
-                            {
-                                values[row, col++] = ((MethodInfo)t).Invoke(item, null);
-                            }
+                            col++;
+                            continue; //Check if the property exists if and inherited class is used
+                        }
+                        else if (t is PropertyInfo)
+                        {
+                            values[row, col++] = ((PropertyInfo)t).GetValue(item, null);
+                        }
+                        else if (t is FieldInfo)
+                        {
+                            values[row, col++] = ((FieldInfo)t).GetValue(item);
+                        }
+                        else if (t is MethodInfo)
+                        {
+                            values[row, col++] = ((MethodInfo)t).Invoke(item, null);
                         }
                     }
-					row++;
-				//}
+                }
+				row++;
 			}
 
             _worksheet.SetRangeValueInner(_fromRow, _fromCol, _fromRow + row - 1, _fromCol + col - 1, values);
@@ -2202,7 +2226,6 @@ namespace OfficeOpenXml
                             {
                                 if (c == Format.Delimiter)
                                 {
-                                    //_worksheet.SetValue(row, col, ConvertData(Format, v, col - _fromCol, isText));
                                     items.Add(ConvertData(Format, v, col, isText));
                                     v = "";
                                     isText = false;
@@ -2220,7 +2243,7 @@ namespace OfficeOpenXml
                             QCount = 0;
                         }
                     }
-                    if (QCount > 1)
+                    if (QCount > 1 && (v!="" && QCount==2))
                     {
                         v += new string(Format.TextQualifier, QCount / 2);
                     }
@@ -2246,7 +2269,7 @@ namespace OfficeOpenXml
                     list[index] = new ExcelCoreValue { _value = item[columnIx], _styleId = list[index]._styleId };
                 }, values);
 
-            return _worksheet.Cells[_fromRow, _fromCol, _fromRow + row, _fromCol + maxCol];
+            return _worksheet.Cells[_fromRow, _fromCol, _fromRow + row-1, _fromCol + maxCol];
         }
 
         private string[] GetLines(string text, ExcelTextFormat Format)
@@ -2275,12 +2298,12 @@ namespace OfficeOpenXml
 
             if(inTQ)
             {
-                throw (new ArgumentException(string.Format("Text delimiter is not closed in line : {0}", prevLineStart + 1)));
+                throw (new ArgumentException(string.Format("Text delimiter is not closed in line : {0}", list.Count)));
             }
-
-            if(Format.EOL.Length==1 && text[text.Length-1]==Format.EOL[0])
+            
+            if (prevLineStart >= Format.EOL.Length && IsEOL(text, prevLineStart - Format.EOL.Length, Format.EOL))
             {
-                list.Add(text.Substring(prevLineStart, text.Length - prevLineStart - 1));
+                //list.Add(text.Substring(prevLineStart- Format.EOL.Length, Format.EOL.Length));
                 list.Add("");
             }
             else
@@ -2296,7 +2319,7 @@ namespace OfficeOpenXml
                 if (text[ix + i] != eol[i])
                     return false;
             }
-            return ix+eol.Length<text.Length;
+            return ix+eol.Length<=text.Length;
         }
 
         /// <summary>
